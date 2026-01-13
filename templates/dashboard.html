@@ -1,0 +1,1295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digital Signage Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --bg-dark: #0f172a;
+            --bg-card: #1e293b;
+            --bg-input: #334155;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --border: #475569;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: 280px 1fr 320px;
+            min-height: 100vh;
+        }
+
+        /* Sidebar - Screen List */
+        .sidebar {
+            background: var(--bg-card);
+            border-right: 1px solid var(--border);
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .sidebar h2 {
+            font-size: 1.1rem;
+            margin-bottom: 20px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .screen-list {
+            list-style: none;
+        }
+
+        .screen-item {
+            padding: 15px;
+            background: var(--bg-input);
+            border-radius: 8px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 2px solid transparent;
+        }
+
+        .screen-item:hover {
+            background: var(--border);
+        }
+
+        .screen-item.selected {
+            border-color: var(--primary);
+        }
+
+        .screen-item .screen-name {
+            font-weight: 600;
+            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .screen-item .screen-id {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            font-family: monospace;
+        }
+
+        .screen-item .screen-resolution {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-top: 5px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .status-dot.online {
+            background: var(--success);
+        }
+
+        .status-dot.offline {
+            background: var(--danger);
+        }
+
+        .no-screens {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-secondary);
+        }
+
+        .no-screens-icon {
+            font-size: 3rem;
+            margin-bottom: 15px;
+        }
+
+        /* Main Content - Preview */
+        .main-content {
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .main-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .main-header h1 {
+            font-size: 1.5rem;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+        }
+
+        .btn-secondary {
+            background: var(--bg-input);
+            color: var(--text-primary);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border);
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        /* Preview Area */
+        .preview-container {
+            flex: 1;
+            background: var(--bg-card);
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .preview-header {
+            padding: 15px 20px;
+            background: var(--bg-input);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .preview-title {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .preview-area {
+            position: relative;
+            width: 100%;
+            height: calc(100% - 60px);
+            background: #1a1a2e;
+            overflow: hidden;
+        }
+
+        .preview-screen {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        .preview-widget {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            border: 2px solid transparent;
+            cursor: move;
+            transition: border-color 0.2s ease;
+            overflow: hidden;
+        }
+
+        .preview-widget:hover,
+        .preview-widget.selected {
+            border-color: var(--primary);
+        }
+
+        .preview-widget .widget-content {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            text-align: center;
+            padding: 10px;
+        }
+
+        .resize-handle {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background: var(--primary);
+            border-radius: 2px;
+            bottom: 0;
+            right: 0;
+            cursor: se-resize;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .preview-widget:hover .resize-handle,
+        .preview-widget.selected .resize-handle {
+            opacity: 1;
+        }
+
+        .empty-preview {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--text-secondary);
+        }
+
+        .empty-preview-icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        /* Widget Panel */
+        .widget-panel {
+            background: var(--bg-card);
+            border-left: 1px solid var(--border);
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .widget-panel h2 {
+            font-size: 1.1rem;
+            margin-bottom: 20px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .widget-types {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 30px;
+        }
+
+        .widget-type-btn {
+            padding: 20px 15px;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.2s ease;
+            color: var(--text-primary);
+        }
+
+        .widget-type-btn:hover {
+            background: var(--border);
+            border-color: var(--primary);
+        }
+
+        .widget-type-icon {
+            font-size: 1.5rem;
+            margin-bottom: 8px;
+        }
+
+        .widget-type-label {
+            font-size: 0.8rem;
+        }
+
+        /* Widget Settings */
+        .widget-settings {
+            display: none;
+        }
+
+        .widget-settings.visible {
+            display: block;
+        }
+
+        .settings-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .settings-header h3 {
+            font-size: 1rem;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 5px;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px 12px;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 0.9rem;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .form-group input[type="color"] {
+            height: 40px;
+            cursor: pointer;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .checkbox-group input {
+            width: auto;
+        }
+
+        /* URL Input */
+        .screen-url {
+            margin-top: 20px;
+            padding: 15px;
+            background: var(--bg-input);
+            border-radius: 8px;
+        }
+
+        .screen-url label {
+            display: block;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+
+        .screen-url input {
+            width: 100%;
+            padding: 8px 12px;
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--text-primary);
+            font-family: monospace;
+            font-size: 0.85rem;
+        }
+
+        .screen-url .copy-btn {
+            margin-top: 10px;
+            width: 100%;
+        }
+
+        /* Toast Notifications */
+        .toast-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+
+        .toast {
+            padding: 15px 20px;
+            background: var(--bg-card);
+            border-radius: 8px;
+            margin-top: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            animation: slideIn 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .toast.success {
+            border-left: 4px solid var(--success);
+        }
+
+        .toast.error {
+            border-left: 4px solid var(--danger);
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal-overlay.visible {
+            display: flex;
+        }
+
+        .modal {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 30px;
+            width: 90%;
+            max-width: 500px;
+        }
+
+        .modal h3 {
+            margin-bottom: 20px;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .dashboard {
+                grid-template-columns: 240px 1fr 280px;
+            }
+        }
+
+        @media (max-width: 900px) {
+            .dashboard {
+                grid-template-columns: 1fr;
+            }
+
+            .sidebar, .widget-panel {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <!-- Sidebar - Screen List -->
+        <aside class="sidebar">
+            <h2>Connected Screens</h2>
+            <ul class="screen-list" id="screen-list">
+                <div class="no-screens" id="no-screens">
+                    <div class="no-screens-icon">📺</div>
+                    <p>No screens connected</p>
+                    <p style="margin-top: 10px; font-size: 0.85rem;">Open /screen in a browser to connect a new display</p>
+                </div>
+            </ul>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="main-header">
+                <h1>Screen Preview</h1>
+                <div class="header-actions">
+                    <button class="btn btn-secondary" onclick="refreshScreen()" title="Refresh selected screen">
+                        🔄 Refresh
+                    </button>
+                    <button class="btn btn-primary" onclick="pushChanges()" title="Push changes to screen">
+                        📤 Push Changes
+                    </button>
+                </div>
+            </div>
+
+            <div class="preview-container">
+                <div class="preview-header">
+                    <span class="preview-title" id="preview-title">Select a screen to edit</span>
+                    <div>
+                        <input type="color" id="bg-color" value="#1a1a2e" title="Background Color" style="cursor: pointer;">
+                    </div>
+                </div>
+                <div class="preview-area" id="preview-area">
+                    <div class="empty-preview" id="empty-preview">
+                        <div class="empty-preview-icon">📺</div>
+                        <p>Select a screen from the sidebar to start editing</p>
+                    </div>
+                    <div class="preview-screen" id="preview-screen" style="display: none;"></div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Widget Panel -->
+        <aside class="widget-panel">
+            <h2>Add Widget</h2>
+            <div class="widget-types">
+                <button class="widget-type-btn" onclick="addWidget('clock')">
+                    <div class="widget-type-icon">🕐</div>
+                    <div class="widget-type-label">Clock</div>
+                </button>
+                <button class="widget-type-btn" onclick="addWidget('weather')">
+                    <div class="widget-type-icon">🌤️</div>
+                    <div class="widget-type-label">Weather</div>
+                </button>
+                <button class="widget-type-btn" onclick="addWidget('image')">
+                    <div class="widget-type-icon">🖼️</div>
+                    <div class="widget-type-label">Image</div>
+                </button>
+                <button class="widget-type-btn" onclick="addWidget('website')">
+                    <div class="widget-type-icon">🌐</div>
+                    <div class="widget-type-label">Website</div>
+                </button>
+                <button class="widget-type-btn" onclick="addWidget('text')">
+                    <div class="widget-type-icon">📝</div>
+                    <div class="widget-type-label">Text</div>
+                </button>
+            </div>
+
+            <div class="widget-settings" id="widget-settings">
+                <div class="settings-header">
+                    <h3 id="settings-title">Widget Settings</h3>
+                    <button class="btn btn-danger" onclick="deleteWidget()" style="padding: 5px 10px;">🗑️</button>
+                </div>
+                <div id="settings-form"></div>
+            </div>
+
+            <div class="screen-url" id="screen-url-section" style="display: none;">
+                <label>Screen URL</label>
+                <input type="text" id="screen-url" readonly>
+                <button class="btn btn-secondary copy-btn" onclick="copyScreenUrl()">📋 Copy URL</button>
+            </div>
+        </aside>
+    </div>
+
+    <!-- Upload Modal -->
+    <div class="modal-overlay" id="upload-modal">
+        <div class="modal">
+            <h3>Upload Image</h3>
+            <div class="form-group">
+                <label>Select Image File</label>
+                <input type="file" id="image-upload" accept="image/*">
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeUploadModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="uploadImage()">Upload</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+    <script>
+        // State
+        let socket = null;
+        let screens = {};
+        let selectedScreen = null;
+        let selectedWidget = null;
+        let currentLayout = null;
+        let isDragging = false;
+        let isResizing = false;
+        let dragOffset = { x: 0, y: 0 };
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            connectSocket();
+            loadScreens();
+            setupEventListeners();
+        });
+
+        // Connect to Socket.IO
+        function connectSocket() {
+            socket = io({
+                reconnection: true,
+                reconnectionAttempts: Infinity,
+                reconnectionDelay: 1000
+            });
+
+            socket.on('connect', () => {
+                console.log('Dashboard connected');
+                socket.emit('join_dashboard');
+            });
+
+            socket.on('screen_status', (data) => {
+                updateScreenStatus(data);
+            });
+
+            socket.on('push_success', (data) => {
+                showToast('Changes pushed successfully!', 'success');
+            });
+
+            socket.on('push_error', (data) => {
+                showToast('Failed to push changes: ' + data.error, 'error');
+            });
+        }
+
+        // Load screens from API
+        async function loadScreens() {
+            try {
+                const response = await fetch('/api/screens');
+                const data = await response.json();
+                screens = {};
+                data.forEach(screen => {
+                    screens[screen.id] = screen;
+                });
+                renderScreenList();
+            } catch (e) {
+                console.error('Failed to load screens:', e);
+            }
+        }
+
+        // Update screen status
+        function updateScreenStatus(data) {
+            if (data.id) {
+                if (!screens[data.id]) {
+                    screens[data.id] = {};
+                }
+                Object.assign(screens[data.id], data);
+                renderScreenList();
+                
+                // Update preview title if this screen is selected
+                if (selectedScreen === data.id) {
+                    updatePreviewTitle();
+                }
+            }
+        }
+
+        // Render screen list
+        function renderScreenList() {
+            const list = document.getElementById('screen-list');
+            const noScreens = document.getElementById('no-screens');
+            const screenIds = Object.keys(screens);
+
+            if (screenIds.length === 0) {
+                noScreens.style.display = 'block';
+                return;
+            }
+
+            noScreens.style.display = 'none';
+            
+            // Clear existing items (except no-screens div)
+            Array.from(list.children).forEach(child => {
+                if (child.id !== 'no-screens') {
+                    child.remove();
+                }
+            });
+
+            screenIds.forEach(id => {
+                const screen = screens[id];
+                const item = document.createElement('li');
+                item.className = 'screen-item' + (selectedScreen === id ? ' selected' : '');
+                item.innerHTML = `
+                    <div class="screen-name">
+                        <span class="status-dot ${screen.connected ? 'online' : 'offline'}"></span>
+                        ${escapeHtml(screen.name || 'Screen ' + id.substring(0, 8))}
+                    </div>
+                    <div class="screen-id">${id}</div>
+                    <div class="screen-resolution">${screen.resolution || 'Unknown'}</div>
+                `;
+                item.onclick = () => selectScreen(id);
+                list.appendChild(item);
+            });
+        }
+
+        // Select screen
+        async function selectScreen(screenId) {
+            selectedScreen = screenId;
+            selectedWidget = null;
+            
+            renderScreenList();
+            document.getElementById('empty-preview').style.display = 'none';
+            document.getElementById('preview-screen').style.display = 'block';
+            document.getElementById('screen-url-section').style.display = 'block';
+            
+            // Update screen URL
+            const screenUrl = `${window.location.origin}/screen/${screenId}`;
+            document.getElementById('screen-url').value = screenUrl;
+            
+            updatePreviewTitle();
+            
+            // Load layout
+            try {
+                const response = await fetch(`/api/screens/${screenId}/layout`);
+                currentLayout = await response.json();
+                renderPreview();
+            } catch (e) {
+                console.error('Failed to load layout:', e);
+                currentLayout = getDefaultLayout();
+                renderPreview();
+            }
+            
+            hideWidgetSettings();
+        }
+
+        // Update preview title
+        function updatePreviewTitle() {
+            const screen = screens[selectedScreen];
+            const status = screen?.connected ? '🟢 Online' : '🔴 Offline';
+            document.getElementById('preview-title').textContent = 
+                `${screen?.name || 'Screen ' + selectedScreen.substring(0, 8)} - ${status}`;
+        }
+
+        // Get default layout
+        function getDefaultLayout() {
+            return {
+                widgets: [],
+                background: '#1a1a2e'
+            };
+        }
+
+        // Render preview
+        function renderPreview() {
+            const previewScreen = document.getElementById('preview-screen');
+            const bgColor = document.getElementById('bg-color');
+            
+            if (currentLayout.background) {
+                previewScreen.style.background = currentLayout.background;
+                bgColor.value = currentLayout.background;
+            }
+            
+            previewScreen.innerHTML = '';
+            
+            if (currentLayout.widgets) {
+                currentLayout.widgets.forEach(widget => {
+                    const el = createPreviewWidget(widget);
+                    previewScreen.appendChild(el);
+                });
+            }
+        }
+
+        // Create preview widget
+        function createPreviewWidget(widget) {
+            const el = document.createElement('div');
+            el.className = 'preview-widget' + (selectedWidget === widget.id ? ' selected' : '');
+            el.id = `preview-widget-${widget.id}`;
+            el.dataset.widgetId = widget.id;
+            el.style.left = `${widget.x}px`;
+            el.style.top = `${widget.y}px`;
+            el.style.width = `${widget.width}px`;
+            el.style.height = `${widget.height}px`;
+
+            let content = '';
+            switch (widget.type) {
+                case 'clock':
+                    content = '🕐 Clock';
+                    break;
+                case 'weather':
+                    content = `🌤️ Weather<br><small>${widget.settings?.location || 'No location'}</small>`;
+                    break;
+                case 'image':
+                    if (widget.settings?.url) {
+                        content = `<img src="${escapeHtml(widget.settings.url)}" style="width:100%;height:100%;object-fit:contain;">`;
+                    } else {
+                        content = '🖼️ Image<br><small>No image set</small>';
+                    }
+                    break;
+                case 'website':
+                    content = `🌐 Website<br><small>${widget.settings?.url || 'No URL'}</small>`;
+                    break;
+                case 'text':
+                    content = `📝 ${escapeHtml(widget.settings?.text?.substring(0, 30) || 'Text')}`;
+                    break;
+            }
+
+            el.innerHTML = `
+                <div class="widget-content">${content}</div>
+                <div class="resize-handle"></div>
+            `;
+
+            // Event listeners for drag
+            el.addEventListener('mousedown', (e) => {
+                if (e.target.classList.contains('resize-handle')) {
+                    startResize(e, widget.id);
+                } else {
+                    startDrag(e, widget.id);
+                }
+            });
+
+            el.addEventListener('click', (e) => {
+                e.stopPropagation();
+                selectWidget(widget.id);
+            });
+
+            return el;
+        }
+
+        // Add widget
+        function addWidget(type) {
+            if (!selectedScreen) {
+                showToast('Please select a screen first', 'error');
+                return;
+            }
+
+            const widget = {
+                id: generateId(),
+                type: type,
+                x: 50,
+                y: 50,
+                width: getDefaultWidgetSize(type).width,
+                height: getDefaultWidgetSize(type).height,
+                settings: getDefaultSettings(type)
+            };
+
+            if (!currentLayout.widgets) {
+                currentLayout.widgets = [];
+            }
+            currentLayout.widgets.push(widget);
+            
+            renderPreview();
+            selectWidget(widget.id);
+            showToast(`${type.charAt(0).toUpperCase() + type.slice(1)} widget added`, 'success');
+        }
+
+        // Get default widget size
+        function getDefaultWidgetSize(type) {
+            const sizes = {
+                clock: { width: 300, height: 150 },
+                weather: { width: 250, height: 200 },
+                image: { width: 400, height: 300 },
+                website: { width: 600, height: 400 },
+                text: { width: 300, height: 100 }
+            };
+            return sizes[type] || { width: 200, height: 150 };
+        }
+
+        // Get default settings
+        function getDefaultSettings(type) {
+            switch (type) {
+                case 'clock':
+                    return { format: '24h', showDate: true };
+                case 'weather':
+                    return { location: 'New York' };
+                case 'image':
+                    return { url: '', alt: 'Image' };
+                case 'website':
+                    return { url: '' };
+                case 'text':
+                    return { text: 'Hello World', color: '#ffffff', fontSize: '2rem' };
+                default:
+                    return {};
+            }
+        }
+
+        // Select widget
+        function selectWidget(widgetId) {
+            selectedWidget = widgetId;
+            
+            // Update visual selection
+            document.querySelectorAll('.preview-widget').forEach(el => {
+                el.classList.toggle('selected', el.dataset.widgetId === widgetId);
+            });
+            
+            showWidgetSettings(widgetId);
+        }
+
+        // Show widget settings
+        function showWidgetSettings(widgetId) {
+            const widget = currentLayout.widgets.find(w => w.id === widgetId);
+            if (!widget) return;
+
+            const settingsPanel = document.getElementById('widget-settings');
+            const settingsTitle = document.getElementById('settings-title');
+            const settingsForm = document.getElementById('settings-form');
+            
+            settingsPanel.classList.add('visible');
+            settingsTitle.textContent = widget.type.charAt(0).toUpperCase() + widget.type.slice(1) + ' Settings';
+            
+            let formHtml = `
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>X Position</label>
+                        <input type="number" id="widget-x" value="${widget.x}" onchange="updateWidgetPosition('x', this.value)">
+                    </div>
+                    <div class="form-group">
+                        <label>Y Position</label>
+                        <input type="number" id="widget-y" value="${widget.y}" onchange="updateWidgetPosition('y', this.value)">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Width</label>
+                        <input type="number" id="widget-width" value="${widget.width}" onchange="updateWidgetSize('width', this.value)">
+                    </div>
+                    <div class="form-group">
+                        <label>Height</label>
+                        <input type="number" id="widget-height" value="${widget.height}" onchange="updateWidgetSize('height', this.value)">
+                    </div>
+                </div>
+            `;
+
+            // Type-specific settings
+            switch (widget.type) {
+                case 'clock':
+                    formHtml += `
+                        <div class="form-group">
+                            <label>Format</label>
+                            <select id="widget-format" onchange="updateWidgetSetting('format', this.value)">
+                                <option value="24h" ${widget.settings.format === '24h' ? 'selected' : ''}>24 Hour</option>
+                                <option value="12h" ${widget.settings.format === '12h' ? 'selected' : ''}>12 Hour</option>
+                            </select>
+                        </div>
+                        <div class="form-group checkbox-group">
+                            <input type="checkbox" id="widget-showDate" ${widget.settings.showDate ? 'checked' : ''} onchange="updateWidgetSetting('showDate', this.checked)">
+                            <label for="widget-showDate">Show Date</label>
+                        </div>
+                    `;
+                    break;
+                case 'weather':
+                    formHtml += `
+                        <div class="form-group">
+                            <label>Location</label>
+                            <input type="text" id="widget-location" value="${escapeHtml(widget.settings.location || '')}" onchange="updateWidgetSetting('location', this.value)">
+                        </div>
+                    `;
+                    break;
+                case 'image':
+                    formHtml += `
+                        <div class="form-group">
+                            <label>Image URL</label>
+                            <input type="text" id="widget-url" value="${escapeHtml(widget.settings.url || '')}" onchange="updateWidgetSetting('url', this.value)">
+                        </div>
+                        <div class="form-group">
+                            <button class="btn btn-secondary" onclick="openUploadModal()" style="width: 100%;">📤 Upload Image</button>
+                        </div>
+                    `;
+                    break;
+                case 'website':
+                    formHtml += `
+                        <div class="form-group">
+                            <label>Website URL</label>
+                            <input type="url" id="widget-url" value="${escapeHtml(widget.settings.url || '')}" onchange="updateWidgetSetting('url', this.value)" placeholder="https://example.com">
+                        </div>
+                    `;
+                    break;
+                case 'text':
+                    formHtml += `
+                        <div class="form-group">
+                            <label>Text Content</label>
+                            <textarea id="widget-text" rows="3" onchange="updateWidgetSetting('text', this.value)">${escapeHtml(widget.settings.text || '')}</textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Text Color</label>
+                            <input type="color" id="widget-color" value="${widget.settings.color || '#ffffff'}" onchange="updateWidgetSetting('color', this.value)">
+                        </div>
+                        <div class="form-group">
+                            <label>Font Size</label>
+                            <input type="text" id="widget-fontSize" value="${widget.settings.fontSize || '2rem'}" onchange="updateWidgetSetting('fontSize', this.value)">
+                        </div>
+                    `;
+                    break;
+            }
+
+            settingsForm.innerHTML = formHtml;
+        }
+
+        // Hide widget settings
+        function hideWidgetSettings() {
+            document.getElementById('widget-settings').classList.remove('visible');
+            selectedWidget = null;
+        }
+
+        // Update widget position
+        function updateWidgetPosition(prop, value) {
+            if (!selectedWidget) return;
+            const widget = currentLayout.widgets.find(w => w.id === selectedWidget);
+            if (widget) {
+                widget[prop] = parseInt(value);
+                renderPreview();
+            }
+        }
+
+        // Update widget size
+        function updateWidgetSize(prop, value) {
+            if (!selectedWidget) return;
+            const widget = currentLayout.widgets.find(w => w.id === selectedWidget);
+            if (widget) {
+                widget[prop] = parseInt(value);
+                renderPreview();
+            }
+        }
+
+        // Update widget setting
+        function updateWidgetSetting(prop, value) {
+            if (!selectedWidget) return;
+            const widget = currentLayout.widgets.find(w => w.id === selectedWidget);
+            if (widget) {
+                widget.settings[prop] = value;
+                renderPreview();
+            }
+        }
+
+        // Delete widget
+        function deleteWidget() {
+            if (!selectedWidget) return;
+            currentLayout.widgets = currentLayout.widgets.filter(w => w.id !== selectedWidget);
+            hideWidgetSettings();
+            renderPreview();
+            showToast('Widget deleted', 'success');
+        }
+
+        // Drag functionality
+        function startDrag(e, widgetId) {
+            isDragging = true;
+            selectedWidget = widgetId;
+            
+            const widget = currentLayout.widgets.find(w => w.id === widgetId);
+            const el = document.getElementById(`preview-widget-${widgetId}`);
+            
+            dragOffset.x = e.clientX - el.offsetLeft;
+            dragOffset.y = e.clientY - el.offsetTop;
+            
+            document.addEventListener('mousemove', onDrag);
+            document.addEventListener('mouseup', stopDrag);
+        }
+
+        function onDrag(e) {
+            if (!isDragging || !selectedWidget) return;
+            
+            const widget = currentLayout.widgets.find(w => w.id === selectedWidget);
+            const previewArea = document.getElementById('preview-area');
+            const rect = previewArea.getBoundingClientRect();
+            
+            const newX = e.clientX - rect.left - dragOffset.x + previewArea.scrollLeft;
+            const newY = e.clientY - rect.top - dragOffset.y + previewArea.scrollTop;
+            
+            widget.x = Math.max(0, newX);
+            widget.y = Math.max(0, newY);
+            
+            const el = document.getElementById(`preview-widget-${selectedWidget}`);
+            el.style.left = `${widget.x}px`;
+            el.style.top = `${widget.y}px`;
+        }
+
+        function stopDrag() {
+            isDragging = false;
+            document.removeEventListener('mousemove', onDrag);
+            document.removeEventListener('mouseup', stopDrag);
+            
+            if (selectedWidget) {
+                showWidgetSettings(selectedWidget);
+            }
+        }
+
+        // Resize functionality
+        function startResize(e, widgetId) {
+            e.preventDefault();
+            e.stopPropagation();
+            isResizing = true;
+            selectedWidget = widgetId;
+            
+            document.addEventListener('mousemove', onResize);
+            document.addEventListener('mouseup', stopResize);
+        }
+
+        function onResize(e) {
+            if (!isResizing || !selectedWidget) return;
+            
+            const widget = currentLayout.widgets.find(w => w.id === selectedWidget);
+            const el = document.getElementById(`preview-widget-${selectedWidget}`);
+            const previewArea = document.getElementById('preview-area');
+            const rect = previewArea.getBoundingClientRect();
+            
+            const newWidth = e.clientX - rect.left - widget.x;
+            const newHeight = e.clientY - rect.top - widget.y;
+            
+            widget.width = Math.max(50, newWidth);
+            widget.height = Math.max(50, newHeight);
+            
+            el.style.width = `${widget.width}px`;
+            el.style.height = `${widget.height}px`;
+        }
+
+        function stopResize() {
+            isResizing = false;
+            document.removeEventListener('mousemove', onResize);
+            document.removeEventListener('mouseup', stopResize);
+            
+            if (selectedWidget) {
+                showWidgetSettings(selectedWidget);
+            }
+        }
+
+        // Push changes to screen
+        function pushChanges() {
+            if (!selectedScreen) {
+                showToast('Please select a screen first', 'error');
+                return;
+            }
+
+            currentLayout.background = document.getElementById('bg-color').value;
+            
+            socket.emit('push_layout', {
+                screen_id: selectedScreen,
+                layout: currentLayout
+            });
+        }
+
+        // Refresh screen
+        function refreshScreen() {
+            if (!selectedScreen) {
+                showToast('Please select a screen first', 'error');
+                return;
+            }
+            
+            socket.emit('refresh_screen', { screen_id: selectedScreen });
+            showToast('Refresh command sent', 'success');
+        }
+
+        // Upload modal
+        function openUploadModal() {
+            document.getElementById('upload-modal').classList.add('visible');
+        }
+
+        function closeUploadModal() {
+            document.getElementById('upload-modal').classList.remove('visible');
+        }
+
+        async function uploadImage() {
+            const fileInput = document.getElementById('image-upload');
+            if (!fileInput.files.length) {
+                showToast('Please select a file', 'error');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            try {
+                const response = await fetch('/api/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('widget-url').value = data.url;
+                    updateWidgetSetting('url', data.url);
+                    closeUploadModal();
+                    showToast('Image uploaded successfully', 'success');
+                } else {
+                    showToast('Upload failed: ' + data.error, 'error');
+                }
+            } catch (e) {
+                showToast('Upload failed', 'error');
+            }
+        }
+
+        // Copy screen URL
+        function copyScreenUrl() {
+            const urlInput = document.getElementById('screen-url');
+            const url = urlInput.value;
+            
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(url).then(() => {
+                    showToast('URL copied to clipboard', 'success');
+                }).catch(() => {
+                    // Fallback for older browsers
+                    urlInput.select();
+                    document.execCommand('copy');
+                    showToast('URL copied to clipboard', 'success');
+                });
+            } else {
+                // Fallback for older browsers
+                urlInput.select();
+                document.execCommand('copy');
+                showToast('URL copied to clipboard', 'success');
+            }
+        }
+
+        // Setup event listeners
+        function setupEventListeners() {
+            // Background color change
+            document.getElementById('bg-color').addEventListener('change', (e) => {
+                if (currentLayout) {
+                    currentLayout.background = e.target.value;
+                    document.getElementById('preview-screen').style.background = e.target.value;
+                }
+            });
+
+            // Click outside to deselect widget
+            document.getElementById('preview-area').addEventListener('click', (e) => {
+                if (e.target.id === 'preview-area' || e.target.id === 'preview-screen') {
+                    selectedWidget = null;
+                    document.querySelectorAll('.preview-widget').forEach(el => el.classList.remove('selected'));
+                    hideWidgetSettings();
+                }
+            });
+        }
+
+        // Utility functions
+        function generateId() {
+            return 'xxxx-xxxx-xxxx'.replace(/x/g, () => Math.floor(Math.random() * 16).toString(16));
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function showToast(message, type) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.innerHTML = `
+                <span>${type === 'success' ? '✅' : '❌'}</span>
+                <span>${escapeHtml(message)}</span>
+            `;
+            container.appendChild(toast);
+            
+            setTimeout(() => toast.remove(), 3000);
+        }
+    </script>
+</body>
+</html>

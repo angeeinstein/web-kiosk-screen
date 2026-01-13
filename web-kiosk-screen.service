@@ -1,0 +1,28 @@
+[Unit]
+Description=Web Kiosk Screen - Digital Signage Solution
+Documentation=https://github.com/angeeinstein/web-kiosk-screen
+After=network.target
+
+[Service]
+Type=notify
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/web-kiosk-screen
+Environment="PATH=/opt/web-kiosk-screen/venv/bin"
+Environment="SECRET_KEY=change-this-to-a-secure-random-string"
+ExecStart=/opt/web-kiosk-screen/venv/bin/gunicorn --config gunicorn.conf.py app:app
+ExecReload=/bin/kill -s HUP $MAINPID
+KillMode=mixed
+TimeoutStopSec=5
+PrivateTmp=true
+Restart=always
+RestartSec=5
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/web-kiosk-screen/static/uploads /var/log/web-kiosk-screen
+
+[Install]
+WantedBy=multi-user.target
