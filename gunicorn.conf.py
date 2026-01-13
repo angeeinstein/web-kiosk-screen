@@ -18,8 +18,10 @@ timeout = 120
 keepalive = 5
 
 # Logging
-accesslog = "/var/log/web-kiosk-screen/access.log"
-errorlog = "/var/log/web-kiosk-screen/error.log"
+# Log to stdout/stderr for systemd to capture (journald)
+# This avoids permission and directory creation issues
+accesslog = "-"  # Log to stdout
+errorlog = "-"   # Log to stderr
 loglevel = "info"
 
 # Process naming
