@@ -1227,9 +1227,23 @@
         // Copy screen URL
         function copyScreenUrl() {
             const urlInput = document.getElementById('screen-url');
-            urlInput.select();
-            document.execCommand('copy');
-            showToast('URL copied to clipboard', 'success');
+            const url = urlInput.value;
+            
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(url).then(() => {
+                    showToast('URL copied to clipboard', 'success');
+                }).catch(() => {
+                    // Fallback for older browsers
+                    urlInput.select();
+                    document.execCommand('copy');
+                    showToast('URL copied to clipboard', 'success');
+                });
+            } else {
+                // Fallback for older browsers
+                urlInput.select();
+                document.execCommand('copy');
+                showToast('URL copied to clipboard', 'success');
+            }
         }
 
         // Setup event listeners
