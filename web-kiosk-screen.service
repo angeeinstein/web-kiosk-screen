@@ -18,6 +18,10 @@ PrivateTmp=true
 Restart=always
 RestartSec=5
 
+# Create runtime directories
+RuntimeDirectory=web-kiosk-screen
+LogsDirectory=web-kiosk-screen
+
 # Security hardening
 NoNewPrivileges=true
 ProtectSystem=strict
