@@ -10,6 +10,7 @@ A Python/Flask-based digital signage solution for managing and displaying conten
 - **Offline Mode**: Screens continue showing cached content when connection is lost
 - **Resilient Display**: No error messages shown to viewers - graceful degradation
 - **Web Dashboard**: Full control panel for managing screens and content
+- **Production Ready**: Runs with Gunicorn on port 80 as a systemd service
 
 ### Widget Types
 
@@ -19,7 +20,41 @@ A Python/Flask-based digital signage solution for managing and displaying conten
 - **Website**: Embed external websites via iframe
 - **Text**: Customizable text with color and font size options
 
-## Installation
+## Quick Installation (Recommended)
+
+For production deployment on Linux servers, use the automated install script:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/angeeinstein/web-kiosk-screen/main/install.sh | sudo bash
+```
+
+This will:
+- Install all system dependencies (Python, Git, etc.)
+- Clone the repository to `/opt/web-kiosk-screen`
+- Create a Python virtual environment
+- Install all Python packages
+- Configure and start a systemd service on port 80
+- Set up log files in `/var/log/web-kiosk-screen`
+
+After installation, access the dashboard at `http://your-server-ip/`
+
+### Updating
+
+To update an existing installation:
+
+```bash
+sudo /opt/web-kiosk-screen/install.sh
+```
+
+The script will detect the existing installation and offer to update it.
+
+### Uninstalling
+
+```bash
+sudo /opt/web-kiosk-screen/install.sh --uninstall
+```
+
+## Manual Installation (Development)
 
 ### Prerequisites
 
@@ -45,19 +80,24 @@ A Python/Flask-based digital signage solution for managing and displaying conten
    pip install -r requirements.txt
    ```
 
-4. Run the application:
+4. Run the application (development mode):
    ```bash
    python app.py
    ```
 
-5. Access the dashboard at `http://localhost:5000`
+5. Or run with Gunicorn (production mode):
+   ```bash
+   gunicorn --config gunicorn.conf.py app:app
+   ```
+
+6. Access the dashboard at `http://localhost:5000` (dev) or `http://localhost:80` (production)
 
 ## Usage
 
 ### Dashboard
 
-1. Open the dashboard at `http://localhost:5000/dashboard`
-2. Connect screens by opening `http://localhost:5000/screen` on display devices
+1. Open the dashboard at `http://your-server-ip/dashboard`
+2. Connect screens by opening `http://your-server-ip/screen` on display devices
 3. Each screen gets a unique ID that can be bookmarked for persistence
 4. Select a screen from the sidebar to edit its layout
 5. Add widgets using the widget panel
@@ -70,6 +110,27 @@ A Python/Flask-based digital signage solution for managing and displaying conten
 - Open `/screen/<screen_id>` to reconnect a specific screen
 - Screens automatically reconnect after connection loss
 - Content is cached locally and displayed during offline periods
+
+### Service Management
+
+When installed as a systemd service:
+
+```bash
+# View service status
+sudo systemctl status web-kiosk-screen
+
+# View logs
+sudo journalctl -u web-kiosk-screen -f
+
+# Restart service
+sudo systemctl restart web-kiosk-screen
+
+# Stop service
+sudo systemctl stop web-kiosk-screen
+
+# Start service
+sudo systemctl start web-kiosk-screen
+```
 
 ### API Endpoints
 
@@ -98,8 +159,8 @@ A Python/Flask-based digital signage solution for managing and displaying conten
 ## Configuration
 
 Environment variables:
-- `PORT`: Server port (default: 5000)
-- `SECRET_KEY`: Flask secret key (change in production)
+- `PORT`: Server port (default: 5000 for dev, 80 for production)
+- `SECRET_KEY`: Flask secret key (auto-generated during installation)
 - `FLASK_DEBUG`: Enable debug mode (true/false)
 
 ## Architecture
@@ -107,7 +168,7 @@ Environment variables:
 ```
 ┌─────────────────┐     WebSocket      ┌──────────────────┐
 │    Dashboard    │◄──────────────────►│   Flask Server   │
-│   (Browser)     │                    │   + Socket.IO    │
+│   (Browser)     │                    │   (Gunicorn)     │
 └─────────────────┘                    └────────┬─────────┘
                                                 │
                     ┌───────────────────────────┼───────────────────────────┐
@@ -117,6 +178,15 @@ Environment variables:
               │ (Browser)  │              │  (Browser)  │              │  (Browser)  │
               └────────────┘              └─────────────┘              └─────────────┘
 ```
+
+## Supported Operating Systems
+
+The install script supports:
+- Ubuntu / Debian
+- CentOS / RHEL / Rocky Linux / AlmaLinux
+- Fedora
+- Arch Linux / Manjaro
+- openSUSE / SLES
 
 ## License
 
