@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Digital Signage Screen</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1a1a2e;
+            color: #ffffff;
+        }
+
+        #screen-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .widget {
+            position: absolute;
+            overflow: hidden;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+        }
+
+        /* Clock Widget */
+        .widget-clock {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .clock-time {
+            font-size: 4rem;
+            font-weight: 300;
+            letter-spacing: 2px;
+        }
+
+        .clock-date {
+            font-size: 1.2rem;
+            opacity: 0.8;
+            margin-top: 10px;
+        }
+
+        /* Weather Widget */
+        .widget-weather {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .weather-temp {
+            font-size: 3rem;
+            font-weight: 300;
+        }
+
+        .weather-desc {
+            font-size: 1rem;
+            opacity: 0.8;
+            margin-top: 5px;
+        }
+
+        .weather-location {
+            font-size: 0.9rem;
+            opacity: 0.6;
+            margin-top: 10px;
+        }
+
+        .weather-icon {
+            font-size: 3rem;
+            margin-bottom: 10px;
+        }
+
+        /* Image Widget */
+        .widget-image {
+            padding: 0;
+            background: transparent;
+        }
+
+        .widget-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        /* Website Widget (iframe) */
+        .widget-website {
+            padding: 0;
+            overflow: hidden;
+        }
+
+        .widget-website iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        /* Text Widget */
+        .widget-text {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .text-content {
+            font-size: 2rem;
+            line-height: 1.4;
+        }
+
+        /* Connection Status Indicator */
+        #connection-status {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #00ff00;
+            opacity: 0.5;
+            transition: all 0.3s ease;
+            z-index: 9999;
+        }
+
+        #connection-status.disconnected {
+            background: #ff0000;
+            animation: pulse 1s infinite;
+        }
+
+        #connection-status.reconnecting {
+            background: #ffaa00;
+            animation: pulse 0.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+
+        /* Offline Banner - Only shown after extended disconnect */
+        #offline-banner {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 8px 20px;
+            background: rgba(255, 170, 0, 0.9);
+            color: #000;
+            text-align: center;
+            font-size: 0.9rem;
+            transform: translateY(100%);
+            transition: transform 0.3s ease;
+            z-index: 9998;
+        }
+
+        #offline-banner.visible {
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body>
+    <div id="screen-container"></div>
+    <div id="connection-status"></div>
+    <div id="offline-banner">Running in offline mode - Content may not be current</div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+    <script>
+        const SCREEN_ID = '{{ screen_id }}';
+        const STORAGE_KEY = 'kiosk_layout_' + SCREEN_ID;
+        const HEARTBEAT_INTERVAL = 5000;
+        const OFFLINE_BANNER_DELAY = 30000; // Show offline banner after 30 seconds
+
+        let socket = null;
+        let currentLayout = null;
+        let reconnectAttempts = 0;
+        let heartbeatTimer = null;
+        let offlineBannerTimer = null;
+        let isOnline = false;
+
+        // Elements
+        const container = document.getElementById('screen-container');
+        const statusIndicator = document.getElementById('connection-status');
+        const offlineBanner = document.getElementById('offline-banner');
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadCachedLayout();
+            connectSocket();
+            startClockUpdates();
+        });
+
+        // Load cached layout from localStorage
+        function loadCachedLayout() {
+            try {
+                const cached = localStorage.getItem(STORAGE_KEY);
+                if (cached) {
+                    currentLayout = JSON.parse(cached);
+                    renderLayout(currentLayout);
+                }
+            } catch (e) {
+                console.warn('Failed to load cached layout:', e);
+            }
+        }
+
+        // Save layout to localStorage
+        function saveLayout(layout) {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(layout));
+            } catch (e) {
+                console.warn('Failed to save layout:', e);
+            }
+        }
+
+        // Connect to Socket.IO
+        function connectSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            
+            socket = io({
+                reconnection: true,
+                reconnectionAttempts: Infinity,
+                reconnectionDelay: 1000,
+                reconnectionDelayMax: 5000,
+                timeout: 10000,
+                transports: ['websocket', 'polling']
+            });
+
+            socket.on('connect', () => {
+                console.log('Connected to server');
+                isOnline = true;
+                reconnectAttempts = 0;
+                updateConnectionStatus('connected');
+                hideOfflineBanner();
+                
+                // Register screen
+                socket.emit('register_screen', {
+                    screen_id: SCREEN_ID,
+                    resolution: `${window.innerWidth}x${window.innerHeight}`
+                });
+                
+                // Start heartbeat
+                startHeartbeat();
+            });
+
+            socket.on('disconnect', () => {
+                console.log('Disconnected from server');
+                isOnline = false;
+                updateConnectionStatus('disconnected');
+                stopHeartbeat();
+                scheduleOfflineBanner();
+            });
+
+            socket.on('connect_error', (error) => {
+                console.warn('Connection error:', error);
+                reconnectAttempts++;
+                updateConnectionStatus('reconnecting');
+            });
+
+            socket.on('layout_update', (layout) => {
+                console.log('Received layout update');
+                currentLayout = layout;
+                saveLayout(layout);
+                renderLayout(layout);
+            });
+
+            socket.on('refresh', () => {
+                console.log('Refresh requested');
+                window.location.reload();
+            });
+        }
+
+        // Update connection status indicator
+        function updateConnectionStatus(status) {
+            statusIndicator.className = '';
+            if (status === 'disconnected') {
+                statusIndicator.classList.add('disconnected');
+            } else if (status === 'reconnecting') {
+                statusIndicator.classList.add('reconnecting');
+            }
+        }
+
+        // Schedule showing offline banner
+        function scheduleOfflineBanner() {
+            if (offlineBannerTimer) clearTimeout(offlineBannerTimer);
+            offlineBannerTimer = setTimeout(() => {
+                if (!isOnline) {
+                    offlineBanner.classList.add('visible');
+                }
+            }, OFFLINE_BANNER_DELAY);
+        }
+
+        // Hide offline banner
+        function hideOfflineBanner() {
+            if (offlineBannerTimer) clearTimeout(offlineBannerTimer);
+            offlineBanner.classList.remove('visible');
+        }
+
+        // Heartbeat
+        function startHeartbeat() {
+            stopHeartbeat();
+            heartbeatTimer = setInterval(() => {
+                if (socket && socket.connected) {
+                    socket.emit('screen_heartbeat', { screen_id: SCREEN_ID });
+                }
+            }, HEARTBEAT_INTERVAL);
+        }
+
+        function stopHeartbeat() {
+            if (heartbeatTimer) {
+                clearInterval(heartbeatTimer);
+                heartbeatTimer = null;
+            }
+        }
+
+        // Render layout
+        function renderLayout(layout) {
+            if (!layout) return;
+
+            // Update background
+            if (layout.background) {
+                container.style.background = layout.background;
+            }
+
+            // Clear existing widgets
+            container.innerHTML = '';
+
+            // Render widgets
+            if (layout.widgets && Array.isArray(layout.widgets)) {
+                layout.widgets.forEach(widget => {
+                    const element = createWidget(widget);
+                    if (element) {
+                        container.appendChild(element);
+                    }
+                });
+            }
+        }
+
+        // Create widget element
+        function createWidget(widget) {
+            const el = document.createElement('div');
+            el.className = `widget widget-${widget.type}`;
+            el.id = `widget-${widget.id}`;
+            el.style.left = `${widget.x}px`;
+            el.style.top = `${widget.y}px`;
+            el.style.width = `${widget.width}px`;
+            el.style.height = `${widget.height}px`;
+
+            switch (widget.type) {
+                case 'clock':
+                    el.innerHTML = createClockContent(widget.settings);
+                    break;
+                case 'weather':
+                    el.innerHTML = createWeatherContent(widget.settings);
+                    updateWeather(widget.id, widget.settings);
+                    break;
+                case 'image':
+                    el.innerHTML = createImageContent(widget.settings);
+                    break;
+                case 'website':
+                    el.innerHTML = createWebsiteContent(widget.settings);
+                    break;
+                case 'text':
+                    el.innerHTML = createTextContent(widget.settings);
+                    break;
+                default:
+                    return null;
+            }
+
+            return el;
+        }
+
+        // Clock widget
+        function createClockContent(settings) {
+            return `
+                <div class="clock-time" id="clock-time"></div>
+                ${settings.showDate ? '<div class="clock-date" id="clock-date"></div>' : ''}
+            `;
+        }
+
+        function startClockUpdates() {
+            updateClock();
+            setInterval(updateClock, 1000);
+        }
+
+        function updateClock() {
+            const timeEl = document.getElementById('clock-time');
+            const dateEl = document.getElementById('clock-date');
+            
+            if (!timeEl) return;
+
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+            
+            timeEl.textContent = `${hours}:${minutes}:${seconds}`;
+
+            if (dateEl) {
+                const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+                dateEl.textContent = now.toLocaleDateString(undefined, options);
+            }
+        }
+
+        // Weather widget
+        function createWeatherContent(settings) {
+            return `
+                <div class="weather-icon">🌤️</div>
+                <div class="weather-temp">--°C</div>
+                <div class="weather-desc">Loading...</div>
+                <div class="weather-location">${settings.location || 'Unknown'}</div>
+            `;
+        }
+
+        function updateWeather(widgetId, settings) {
+            // Weather API call would go here
+            // Using mock data for demonstration
+            const widget = document.getElementById(`widget-${widgetId}`);
+            if (widget) {
+                setTimeout(() => {
+                    const icons = ['☀️', '🌤️', '⛅', '🌥️', '☁️', '🌧️'];
+                    const temps = [18, 20, 22, 24, 26, 28];
+                    const descriptions = ['Sunny', 'Partly Cloudy', 'Cloudy', 'Overcast'];
+                    
+                    widget.querySelector('.weather-icon').textContent = icons[Math.floor(Math.random() * icons.length)];
+                    widget.querySelector('.weather-temp').textContent = `${temps[Math.floor(Math.random() * temps.length)]}°C`;
+                    widget.querySelector('.weather-desc').textContent = descriptions[Math.floor(Math.random() * descriptions.length)];
+                }, 1000);
+            }
+        }
+
+        // Image widget
+        function createImageContent(settings) {
+            return `<img src="${escapeHtml(settings.url || '')}" alt="${escapeHtml(settings.alt || 'Image')}" onerror="this.style.display='none'">`;
+        }
+
+        // Website widget (iframe)
+        function createWebsiteContent(settings) {
+            const url = settings.url || 'about:blank';
+            return `<iframe src="${escapeHtml(url)}" sandbox="allow-scripts allow-same-origin" loading="lazy"></iframe>`;
+        }
+
+        // Text widget
+        function createTextContent(settings) {
+            return `<div class="text-content" style="color: ${settings.color || '#ffffff'}; font-size: ${settings.fontSize || '2rem'}">${escapeHtml(settings.text || '')}</div>`;
+        }
+
+        // Utility function to escape HTML
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Handle visibility change (browser tab/window)
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                // Reconnect if needed
+                if (socket && !socket.connected) {
+                    socket.connect();
+                }
+            }
+        });
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            if (socket && socket.connected) {
+                socket.emit('screen_heartbeat', {
+                    screen_id: SCREEN_ID,
+                    resolution: `${window.innerWidth}x${window.innerHeight}`
+                });
+            }
+        });
+
+        // Prevent context menu
+        document.addEventListener('contextmenu', (e) => e.preventDefault());
+    </script>
+</body>
+</html>
