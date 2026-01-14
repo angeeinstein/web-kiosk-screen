@@ -5,8 +5,8 @@ Gunicorn configuration file for Web Kiosk Screen
 import os
 import multiprocessing
 
-# Bind to port 80 (standard HTTP port)
-bind = "0.0.0.0:80"
+# Bind to port 5000 (non-privileged port)
+bind = "0.0.0.0:5000"
 
 # Worker configuration
 # Use eventlet for Socket.IO support

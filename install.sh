@@ -92,20 +92,20 @@ install_dependencies() {
     case $OS in
         ubuntu|debian)
             apt-get update -qq
-            apt-get install -y -qq python3 python3-venv python3-pip git curl
+            apt-get install -y -qq python3 python3-venv python3-pip git curl nginx
             ;;
         centos|rhel|fedora|rocky|almalinux)
             if command -v dnf &> /dev/null; then
-                dnf install -y python3 python3-pip git curl
+                dnf install -y python3 python3-pip git curl nginx
             else
-                yum install -y python3 python3-pip git curl
+                yum install -y python3 python3-pip git curl nginx
             fi
             ;;
         arch|manjaro)
-            pacman -Sy --noconfirm python python-pip git curl
+            pacman -Sy --noconfirm python python-pip git curl nginx
             ;;
         opensuse*|sles)
-            zypper install -y python3 python3-pip git curl
+            zypper install -y python3 python3-pip git curl nginx
             ;;
         *)
             log_warn "Unknown OS, attempting to continue..."
@@ -149,6 +149,56 @@ generate_secret_key() {
     fi
     
     echo "$secret_key"
+}
+
+# Configure nginx reverse proxy
+configure_nginx() {
+    log_info "Configuring nginx reverse proxy..."
+    
+    # Check if nginx is installed
+    if ! command -v nginx &> /dev/null; then
+        log_error "Nginx is not installed"
+        return 1
+    fi
+    
+    # Copy nginx configuration
+    if [[ -f "$INSTALL_DIR/nginx.conf" ]]; then
+        # For Debian/Ubuntu (sites-available/sites-enabled pattern)
+        if [[ -d /etc/nginx/sites-available ]]; then
+            cp "$INSTALL_DIR/nginx.conf" "/etc/nginx/sites-available/$SERVICE_NAME"
+            
+            # Remove default site if it exists
+            rm -f /etc/nginx/sites-enabled/default
+            
+            # Enable our site
+            ln -sf "/etc/nginx/sites-available/$SERVICE_NAME" "/etc/nginx/sites-enabled/$SERVICE_NAME"
+        # For RHEL/CentOS/Fedora (conf.d pattern)
+        elif [[ -d /etc/nginx/conf.d ]]; then
+            cp "$INSTALL_DIR/nginx.conf" "/etc/nginx/conf.d/$SERVICE_NAME.conf"
+            
+            # Disable default server if it exists
+            if [[ -f /etc/nginx/conf.d/default.conf ]]; then
+                mv /etc/nginx/conf.d/default.conf /etc/nginx/conf.d/default.conf.disabled 2>/dev/null || true
+            fi
+        else
+            log_warn "Unknown nginx configuration directory structure"
+            cp "$INSTALL_DIR/nginx.conf" "/etc/nginx/$SERVICE_NAME.conf"
+        fi
+        
+        # Test nginx configuration
+        if nginx -t 2>/dev/null; then
+            # Enable and restart nginx
+            systemctl enable nginx
+            systemctl restart nginx
+            log_success "Nginx configured and restarted successfully"
+        else
+            log_error "Nginx configuration test failed"
+            return 1
+        fi
+    else
+        log_warn "Nginx configuration file not found at $INSTALL_DIR/nginx.conf"
+        return 1
+    fi
 }
 
 # Get IP address with fallback
@@ -247,6 +297,9 @@ update_installation() {
     chown -R "$SERVICE_USER:$SERVICE_GROUP" "$INSTALL_DIR"
     chmod -R 755 "$INSTALL_DIR"
     
+    # Update nginx configuration
+    configure_nginx || log_warn "Nginx configuration update failed"
+    
     log_info "Starting service..."
     systemctl start "$SERVICE_NAME"
     
@@ -314,6 +367,9 @@ fresh_install() {
     systemctl enable "$SERVICE_NAME"
     systemctl start "$SERVICE_NAME"
     
+    # Configure nginx
+    configure_nginx || log_warn "Nginx configuration failed - service is still accessible on port 5000"
+    
     log_success "Installation completed successfully!"
     show_status
 }
@@ -355,6 +411,16 @@ uninstall() {
     # Remove service file
     rm -f "/etc/systemd/system/$SERVICE_NAME.service"
     systemctl daemon-reload
+    
+    # Remove nginx configuration
+    rm -f "/etc/nginx/sites-available/$SERVICE_NAME" 2>/dev/null || true
+    rm -f "/etc/nginx/sites-enabled/$SERVICE_NAME" 2>/dev/null || true
+    rm -f "/etc/nginx/conf.d/$SERVICE_NAME.conf" 2>/dev/null || true
+    
+    # Reload nginx if it's running
+    if systemctl is-active --quiet nginx 2>/dev/null; then
+        systemctl reload nginx 2>/dev/null || true
+    fi
     
     # Remove installation directory
     rm -rf "$INSTALL_DIR"
