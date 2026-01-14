@@ -34,7 +34,6 @@ This will:
 - Create a Python virtual environment
 - Install all Python packages
 - Configure and start a systemd service on port 80
-- Set up log files in `/var/log/web-kiosk-screen`
 
 After installation, access the dashboard at `http://your-server-ip/`
 
