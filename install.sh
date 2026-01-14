@@ -259,6 +259,30 @@ update_installation() {
     # Get service user
     get_service_user
     
+    # Ensure nginx is installed (in case it wasn't before)
+    log_info "Checking for nginx..."
+    if ! command -v nginx &> /dev/null; then
+        log_info "Nginx not found, installing..."
+        case $OS in
+            ubuntu|debian)
+                apt-get install -y -qq nginx
+                ;;
+            centos|rhel|fedora|rocky|almalinux)
+                if command -v dnf &> /dev/null; then
+                    dnf install -y nginx
+                else
+                    yum install -y nginx
+                fi
+                ;;
+            arch|manjaro)
+                pacman -Sy --noconfirm nginx
+                ;;
+            opensuse*|sles)
+                zypper install -y nginx
+                ;;
+        esac
+    fi
+    
     log_info "Stopping service..."
     systemctl stop "$SERVICE_NAME" 2>/dev/null || true
     
