@@ -257,8 +257,9 @@
 
         .preview-screen {
             position: relative;
-            transform-origin: center center;
             background: #1a1a2e;
+            border: 2px solid var(--border);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
         }
 
         .preview-widget {
@@ -1279,9 +1280,13 @@
             
             const widget = currentLayout.widgets.find(w => w.id === widgetId);
             const el = document.getElementById(`preview-widget-${widgetId}`);
+            const previewScreen = document.getElementById('preview-screen');
+            const scale = parseFloat(previewScreen.dataset.scale) || 1;
             
-            dragOffset.x = e.clientX - el.offsetLeft;
-            dragOffset.y = e.clientY - el.offsetTop;
+            // Calculate offset relative to the widget's position
+            const rect = el.getBoundingClientRect();
+            dragOffset.x = e.clientX - rect.left;
+            dragOffset.y = e.clientY - rect.top;
             
             document.addEventListener('mousemove', onDrag);
             document.addEventListener('mouseup', stopDrag);
