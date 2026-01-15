@@ -1046,14 +1046,19 @@
 
         // Get default widget size
         function getDefaultWidgetSize(type) {
+            const previewScreen = document.getElementById('preview-screen');
+            const screenWidth = parseInt(previewScreen.dataset.originalWidth) || 1920;
+            const screenHeight = parseInt(previewScreen.dataset.originalHeight) || 1080;
+            
+            // Calculate sizes as percentage of screen dimensions
             const sizes = {
-                clock: { width: 300, height: 150 },
-                weather: { width: 250, height: 200 },
-                image: { width: 400, height: 300 },
-                website: { width: 600, height: 400 },
-                text: { width: 300, height: 100 }
+                clock: { width: Math.round(screenWidth * 0.25), height: Math.round(screenHeight * 0.15) },
+                weather: { width: Math.round(screenWidth * 0.20), height: Math.round(screenHeight * 0.20) },
+                image: { width: Math.round(screenWidth * 0.30), height: Math.round(screenHeight * 0.30) },
+                website: { width: Math.round(screenWidth * 0.50), height: Math.round(screenHeight * 0.40) },
+                text: { width: Math.round(screenWidth * 0.25), height: Math.round(screenHeight * 0.10) }
             };
-            return sizes[type] || { width: 200, height: 150 };
+            return sizes[type] || { width: Math.round(screenWidth * 0.20), height: Math.round(screenHeight * 0.15) };
         }
 
         // Get default settings
