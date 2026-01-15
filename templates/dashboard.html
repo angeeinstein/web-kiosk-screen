@@ -243,15 +243,22 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            padding: 20px;
+        }
+
+        .preview-screen-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            max-width: 100%;
+            max-height: 100%;
         }
 
         .preview-screen {
             position: relative;
             transform-origin: center center;
             background: #1a1a2e;
-            flex-shrink: 0;
-            max-width: 100%;
-            max-height: 100%;
         }
 
         .preview-widget {
@@ -890,29 +897,34 @@
             
             if (!previewArea || !previewScreen) return;
             
-            // Get available space
-            const containerWidth = previewArea.clientWidth;
-            const containerHeight = previewArea.clientHeight;
-            
-            // Add safety margins
-            const availableWidth = Math.max(containerWidth - 80, 100);
-            const availableHeight = Math.max(containerHeight - 80, 100);
+            // Get available space (with padding)
+            const containerWidth = previewArea.clientWidth - 40;
+            const containerHeight = previewArea.clientHeight - 40;
             
             // Calculate scale to fit
-            const scaleX = availableWidth / width;
-            const scaleY = availableHeight / height;
+            const scaleX = containerWidth / width;
+            const scaleY = containerHeight / height;
             const scale = Math.min(scaleX, scaleY, 1); // Never scale up
             
-            // Set dimensions
-            previewScreen.style.width = `${width}px`;
-            previewScreen.style.height = `${height}px`;
-            previewScreen.style.transform = `scale(${scale})`;
+            // Calculate final scaled dimensions
+            const scaledWidth = width * scale;
+            const scaledHeight = height * scale;
+            
+            // Set dimensions and transform
+            previewScreen.style.width = `${scaledWidth}px`;
+            previewScreen.style.height = `${scaledHeight}px`;
+            previewScreen.style.transform = 'none';
             previewScreen.style.transformOrigin = 'center center';
             
             // Update resolution display
             if (resolutionDisplay) {
                 resolutionDisplay.textContent = `${width} × ${height} (${Math.round(scale * 100)}%)`;
             }
+            
+            // Important: Store original dimensions for widget positioning
+            previewScreen.dataset.originalWidth = width;
+            previewScreen.dataset.originalHeight = height;
+            previewScreen.dataset.scale = scale;
         }
 
         // Get default layout
@@ -946,13 +958,18 @@
         // Create preview widget
         function createPreviewWidget(widget) {
             const el = document.createElement('div');
+            const previewScreen = document.getElementById('preview-screen');
+            const scale = parseFloat(previewScreen.dataset.scale) || 1;
+            
             el.className = 'preview-widget' + (selectedWidget === widget.id ? ' selected' : '');
             el.id = `preview-widget-${widget.id}`;
             el.dataset.widgetId = widget.id;
-            el.style.left = `${widget.x}px`;
-            el.style.top = `${widget.y}px`;
-            el.style.width = `${widget.width}px`;
-            el.style.height = `${widget.height}px`;
+            
+            // Scale widget positions and dimensions
+            el.style.left = `${widget.x * scale}px`;
+            el.style.top = `${widget.y * scale}px`;
+            el.style.width = `${widget.width * scale}px`;
+            el.style.height = `${widget.height * scale}px`;
 
             let content = '';
             switch (widget.type) {
@@ -1180,16 +1197,16 @@
             const widget = currentLayout.widgets.find(w => w.id === selectedWidget);
             if (widget) {
                 const previewScreen = document.getElementById('preview-screen');
-                const canvasWidth = parseInt(previewScreen.style.width) || previewScreen.clientWidth;
-                const canvasHeight = parseInt(previewScreen.style.height) || previewScreen.clientHeight;
+                const originalWidth = parseInt(previewScreen.dataset.originalWidth) || 1920;
+                const originalHeight = parseInt(previewScreen.dataset.originalHeight) || 1080;
                 
                 let newValue = parseInt(value);
                 
-                // Clamp position to ensure widget stays within canvas
+                // Clamp position to ensure widget stays within original canvas
                 if (prop === 'x') {
-                    newValue = Math.max(0, Math.min(newValue, canvasWidth - widget.width));
+                    newValue = Math.max(0, Math.min(newValue, originalWidth - widget.width));
                 } else if (prop === 'y') {
-                    newValue = Math.max(0, Math.min(newValue, canvasHeight - widget.height));
+                    newValue = Math.max(0, Math.min(newValue, originalHeight - widget.height));
                 }
                 
                 widget[prop] = newValue;
@@ -1211,16 +1228,16 @@
             const widget = currentLayout.widgets.find(w => w.id === selectedWidget);
             if (widget) {
                 const previewScreen = document.getElementById('preview-screen');
-                const canvasWidth = parseInt(previewScreen.style.width) || previewScreen.clientWidth;
-                const canvasHeight = parseInt(previewScreen.style.height) || previewScreen.clientHeight;
+                const originalWidth = parseInt(previewScreen.dataset.originalWidth) || 1920;
+                const originalHeight = parseInt(previewScreen.dataset.originalHeight) || 1080;
                 
                 let newValue = parseInt(value);
                 
-                // Clamp width and height to ensure widget stays within canvas
+                // Clamp width and height to ensure widget stays within original canvas
                 if (prop === 'width') {
-                    newValue = Math.max(50, Math.min(newValue, canvasWidth - widget.x));
+                    newValue = Math.max(50, Math.min(newValue, originalWidth - widget.x));
                 } else if (prop === 'height') {
-                    newValue = Math.max(50, Math.min(newValue, canvasHeight - widget.y));
+                    newValue = Math.max(50, Math.min(newValue, originalHeight - widget.y));
                 }
                 
                 widget[prop] = newValue;
@@ -1275,29 +1292,25 @@
             
             const widget = currentLayout.widgets.find(w => w.id === selectedWidget);
             const previewScreen = document.getElementById('preview-screen');
-            const previewArea = document.getElementById('preview-area');
-            const rect = previewArea.getBoundingClientRect();
             const screenRect = previewScreen.getBoundingClientRect();
             
-            // Get canvas dimensions
-            const canvasWidth = parseInt(previewScreen.style.width) || previewScreen.clientWidth;
-            const canvasHeight = parseInt(previewScreen.style.height) || previewScreen.clientHeight;
+            // Get original dimensions and scale
+            const originalWidth = parseInt(previewScreen.dataset.originalWidth) || 1920;
+            const originalHeight = parseInt(previewScreen.dataset.originalHeight) || 1080;
+            const scale = parseFloat(previewScreen.dataset.scale) || 1;
             
-            // Calculate scale from transform
-            const transform = previewScreen.style.transform;
-            const scaleMatch = transform.match(/scale\(([0-9.]+)\)/);
-            const scale = scaleMatch ? parseFloat(scaleMatch[1]) : 1;
+            // Calculate position relative to the preview screen
+            const newX = (e.clientX - screenRect.left - dragOffset.x) / scale;
+            const newY = (e.clientY - screenRect.top - dragOffset.y) / scale;
             
-            // Calculate position relative to scaled canvas
-            const newX = (e.clientX - screenRect.left) / scale - dragOffset.x;
-            const newY = (e.clientY - screenRect.top) / scale - dragOffset.y;
+            // Clamp to original canvas bounds
+            widget.x = Math.max(0, Math.min(newX, originalWidth - widget.width));
+            widget.y = Math.max(0, Math.min(newY, originalHeight - widget.height));
             
-            widget.x = Math.max(0, Math.min(newX, canvasWidth - widget.width));
-            widget.y = Math.max(0, Math.min(newY, canvasHeight - widget.height));
-            
+            // Update element position with scaled coordinates
             const el = document.getElementById(`preview-widget-${selectedWidget}`);
-            el.style.left = `${widget.x}px`;
-            el.style.top = `${widget.y}px`;
+            el.style.left = `${widget.x * scale}px`;
+            el.style.top = `${widget.y * scale}px`;
         }
 
         function stopDrag() {
