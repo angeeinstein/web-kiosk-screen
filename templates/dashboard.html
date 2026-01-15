@@ -239,7 +239,7 @@
             width: 100%;
             height: calc(100% - 60px);
             background: #1a1a2e;
-            overflow: auto;
+            overflow: hidden;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -249,6 +249,7 @@
             position: relative;
             transform-origin: center center;
             background: #1a1a2e;
+            flex-shrink: 0;
         }
 
         .preview-widget {
@@ -885,22 +886,28 @@
             const previewArea = document.getElementById('preview-area');
             const resolutionDisplay = document.getElementById('preview-resolution');
             
-            // Set actual dimensions
-            previewScreen.style.width = `${width}px`;
-            previewScreen.style.height = `${height}px`;
-            
-            // Calculate scale to fit within preview area
+            // Get available space
             const containerWidth = previewArea.clientWidth - 40; // padding
             const containerHeight = previewArea.clientHeight - 40;
             
+            // Calculate scale to fit
             const scaleX = containerWidth / width;
             const scaleY = containerHeight / height;
-            const scale = Math.min(scaleX, scaleY, 1); // Don't scale up, only down
+            const scale = Math.min(scaleX, scaleY, 0.95); // Max 95% to ensure it fits with some margin
             
+            // Set scaled dimensions (this prevents the element from taking up full unscaled space)
+            const scaledWidth = width * scale;
+            const scaledHeight = height * scale;
+            
+            previewScreen.style.width = `${width}px`;
+            previewScreen.style.height = `${height}px`;
             previewScreen.style.transform = `scale(${scale})`;
+            previewScreen.style.transformOrigin = 'center center';
             
             // Update resolution display
-            resolutionDisplay.textContent = `${width} × ${height} (${Math.round(scale * 100)}% scale)`;
+            if (resolutionDisplay) {
+                resolutionDisplay.textContent = `${width} × ${height} (${Math.round(scale * 100)}% scale)`;
+            }
         }
 
         // Get default layout
