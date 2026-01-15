@@ -1349,17 +1349,28 @@
             
             const widget = currentLayout.widgets.find(w => w.id === selectedWidget);
             const el = document.getElementById(`preview-widget-${selectedWidget}`);
-            const previewArea = document.getElementById('preview-area');
-            const rect = previewArea.getBoundingClientRect();
+            const previewScreen = document.getElementById('preview-screen');
+            const screenRect = previewScreen.getBoundingClientRect();
             
-            const newWidth = e.clientX - rect.left - widget.x;
-            const newHeight = e.clientY - rect.top - widget.y;
+            // Get original dimensions and scale
+            const originalWidth = parseInt(previewScreen.dataset.originalWidth) || 1920;
+            const originalHeight = parseInt(previewScreen.dataset.originalHeight) || 1080;
+            const scale = parseFloat(previewScreen.dataset.scale) || 1;
             
-            widget.width = Math.max(50, newWidth);
-            widget.height = Math.max(50, newHeight);
+            // Calculate new size in original coordinates
+            const mouseXInScreen = (e.clientX - screenRect.left) / scale;
+            const mouseYInScreen = (e.clientY - screenRect.top) / scale;
             
-            el.style.width = `${widget.width}px`;
-            el.style.height = `${widget.height}px`;
+            const newWidth = mouseXInScreen - widget.x;
+            const newHeight = mouseYInScreen - widget.y;
+            
+            // Clamp to minimum and screen bounds
+            widget.width = Math.max(50, Math.min(newWidth, originalWidth - widget.x));
+            widget.height = Math.max(50, Math.min(newHeight, originalHeight - widget.y));
+            
+            // Update element with scaled dimensions
+            el.style.width = `${widget.width * scale}px`;
+            el.style.height = `${widget.height * scale}px`;
         }
 
         function stopResize() {
