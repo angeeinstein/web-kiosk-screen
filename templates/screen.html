@@ -183,7 +183,18 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
     <script>
-        const SCREEN_ID = '{{ screen_id }}';
+        // Get or generate screen ID and store it in localStorage
+        let SCREEN_ID = '{{ screen_id }}';
+        
+        // If screen_id from URL is generic (auto-generated), check localStorage first
+        const STORED_SCREEN_ID = localStorage.getItem('kiosk_screen_id');
+        if (STORED_SCREEN_ID) {
+            SCREEN_ID = STORED_SCREEN_ID;
+        } else {
+            // Store the current screen ID for future reloads
+            localStorage.setItem('kiosk_screen_id', SCREEN_ID);
+        }
+        
         const STORAGE_KEY = 'kiosk_layout_' + SCREEN_ID;
         const HEARTBEAT_INTERVAL = 5000;
         const OFFLINE_BANNER_DELAY = 30000; // Show offline banner after 30 seconds
