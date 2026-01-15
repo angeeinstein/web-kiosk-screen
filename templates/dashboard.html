@@ -96,6 +96,27 @@
             margin-top: 5px;
         }
 
+        .screen-item .screen-actions {
+            display: flex;
+            gap: 5px;
+            margin-top: 8px;
+        }
+
+        .screen-item .btn-delete {
+            padding: 4px 8px;
+            font-size: 0.75rem;
+            background: var(--danger);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .screen-item .btn-delete:hover {
+            background: #dc2626;
+        }
+
         .status-dot {
             width: 8px;
             height: 8px;
@@ -207,18 +228,27 @@
             color: var(--text-secondary);
         }
 
+        .preview-resolution {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            font-family: monospace;
+        }
+
         .preview-area {
             position: relative;
             width: 100%;
             height: calc(100% - 60px);
             background: #1a1a2e;
-            overflow: hidden;
+            overflow: auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .preview-screen {
-            width: 100%;
-            height: 100%;
             position: relative;
+            transform-origin: center center;
+            background: #1a1a2e;
         }
 
         .preview-widget {
@@ -552,7 +582,10 @@
 
             <div class="preview-container">
                 <div class="preview-header">
-                    <span class="preview-title" id="preview-title">Select a screen to edit</span>
+                    <div>
+                        <span class="preview-title" id="preview-title">Select a screen to edit</span>
+                        <div class="preview-resolution" id="preview-resolution"></div>
+                    </div>
                     <div>
                         <input type="color" id="bg-color" value="#1a1a2e" title="Background Color" style="cursor: pointer;">
                     </div>
@@ -670,6 +703,19 @@
             socket.on('push_error', (data) => {
                 showToast('Failed to push changes: ' + data.error, 'error');
             });
+
+            socket.on('screen_deleted', (data) => {
+                if (data.id && screens[data.id]) {
+                    delete screens[data.id];
+                    if (selectedScreen === data.id) {
+                        selectedScreen = null;
+                        document.getElementById('empty-preview').style.display = 'flex';
+                        document.getElementById('preview-screen').style.display = 'none';
+                        hideWidgetSettings();
+                    }
+                    renderScreenList();
+                }
+            });
         }
 
         // Load screens from API
@@ -734,10 +780,43 @@
                     </div>
                     <div class="screen-id">${id}</div>
                     <div class="screen-resolution">${screen.resolution || 'Unknown'}</div>
+                    <div class="screen-actions">
+                        <button class="btn-delete" onclick="event.stopPropagation(); deleteScreen('${id}')">🗑️ Delete</button>
+                    </div>
                 `;
                 item.onclick = () => selectScreen(id);
                 list.appendChild(item);
             });
+        }
+
+        // Delete screen
+        async function deleteScreen(screenId) {
+            if (!confirm(`Delete screen "${screens[screenId]?.name || screenId.substring(0, 8)}"?\n\nThis will remove the screen and all its widgets. This action cannot be undone.`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/screens/${screenId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    delete screens[screenId];
+                    if (selectedScreen === screenId) {
+                        selectedScreen = null;
+                        document.getElementById('empty-preview').style.display = 'flex';
+                        document.getElementById('preview-screen').style.display = 'none';
+                        hideWidgetSettings();
+                    }
+                    renderScreenList();
+                    showToast('Screen deleted successfully', 'success');
+                } else {
+                    showToast('Failed to delete screen', 'error');
+                }
+            } catch (e) {
+                console.error('Failed to delete screen:', e);
+                showToast('Failed to delete screen', 'error');
+            }
         }
 
         // Select screen
@@ -753,6 +832,9 @@
             // Update screen URL
             const screenUrl = `${window.location.origin}/screen/${screenId}`;
             document.getElementById('screen-url').value = screenUrl;
+            
+            // Set canvas dimensions based on screen resolution
+            updateCanvasSize();
             
             updatePreviewTitle();
             
@@ -776,6 +858,49 @@
             const status = screen?.connected ? '🟢 Online' : '🔴 Offline';
             document.getElementById('preview-title').textContent = 
                 `${screen?.name || 'Screen ' + selectedScreen.substring(0, 8)} - ${status}`;
+        }
+
+        // Update canvas size based on screen resolution
+        function updateCanvasSize() {
+            const screen = screens[selectedScreen];
+            if (!screen || !screen.resolution) {
+                // Default resolution if not detected
+                setCanvasDimensions(1920, 1080);
+                return;
+            }
+
+            // Parse resolution (e.g., "1920x1080")
+            const [width, height] = screen.resolution.split('x').map(Number);
+            if (width && height) {
+                setCanvasDimensions(width, height);
+            } else {
+                // Fallback
+                setCanvasDimensions(1920, 1080);
+            }
+        }
+
+        // Set canvas dimensions and scale to fit
+        function setCanvasDimensions(width, height) {
+            const previewScreen = document.getElementById('preview-screen');
+            const previewArea = document.getElementById('preview-area');
+            const resolutionDisplay = document.getElementById('preview-resolution');
+            
+            // Set actual dimensions
+            previewScreen.style.width = `${width}px`;
+            previewScreen.style.height = `${height}px`;
+            
+            // Calculate scale to fit within preview area
+            const containerWidth = previewArea.clientWidth - 40; // padding
+            const containerHeight = previewArea.clientHeight - 40;
+            
+            const scaleX = containerWidth / width;
+            const scaleY = containerHeight / height;
+            const scale = Math.min(scaleX, scaleY, 1); // Don't scale up, only down
+            
+            previewScreen.style.transform = `scale(${scale})`;
+            
+            // Update resolution display
+            resolutionDisplay.textContent = `${width} × ${height} (${Math.round(scale * 100)}% scale)`;
         }
 
         // Get default layout
@@ -1042,7 +1167,28 @@
             if (!selectedWidget) return;
             const widget = currentLayout.widgets.find(w => w.id === selectedWidget);
             if (widget) {
-                widget[prop] = parseInt(value);
+                const previewScreen = document.getElementById('preview-screen');
+                const canvasWidth = parseInt(previewScreen.style.width) || previewScreen.clientWidth;
+                const canvasHeight = parseInt(previewScreen.style.height) || previewScreen.clientHeight;
+                
+                let newValue = parseInt(value);
+                
+                // Clamp position to ensure widget stays within canvas
+                if (prop === 'x') {
+                    newValue = Math.max(0, Math.min(newValue, canvasWidth - widget.width));
+                } else if (prop === 'y') {
+                    newValue = Math.max(0, Math.min(newValue, canvasHeight - widget.height));
+                }
+                
+                widget[prop] = newValue;
+                
+                // Update input field to show clamped value
+                const inputId = `widget-${prop}`;
+                const input = document.getElementById(inputId);
+                if (input && input.value != newValue) {
+                    input.value = newValue;
+                }
+                
                 renderPreview();
             }
         }
@@ -1052,7 +1198,28 @@
             if (!selectedWidget) return;
             const widget = currentLayout.widgets.find(w => w.id === selectedWidget);
             if (widget) {
-                widget[prop] = parseInt(value);
+                const previewScreen = document.getElementById('preview-screen');
+                const canvasWidth = parseInt(previewScreen.style.width) || previewScreen.clientWidth;
+                const canvasHeight = parseInt(previewScreen.style.height) || previewScreen.clientHeight;
+                
+                let newValue = parseInt(value);
+                
+                // Clamp width and height to ensure widget stays within canvas
+                if (prop === 'width') {
+                    newValue = Math.max(50, Math.min(newValue, canvasWidth - widget.x));
+                } else if (prop === 'height') {
+                    newValue = Math.max(50, Math.min(newValue, canvasHeight - widget.y));
+                }
+                
+                widget[prop] = newValue;
+                
+                // Update input field to show clamped value
+                const inputId = `widget-${prop}`;
+                const input = document.getElementById(inputId);
+                if (input && input.value != newValue) {
+                    input.value = newValue;
+                }
+                
                 renderPreview();
             }
         }
@@ -1095,14 +1262,26 @@
             if (!isDragging || !selectedWidget) return;
             
             const widget = currentLayout.widgets.find(w => w.id === selectedWidget);
+            const previewScreen = document.getElementById('preview-screen');
             const previewArea = document.getElementById('preview-area');
             const rect = previewArea.getBoundingClientRect();
+            const screenRect = previewScreen.getBoundingClientRect();
             
-            const newX = e.clientX - rect.left - dragOffset.x + previewArea.scrollLeft;
-            const newY = e.clientY - rect.top - dragOffset.y + previewArea.scrollTop;
+            // Get canvas dimensions
+            const canvasWidth = parseInt(previewScreen.style.width) || previewScreen.clientWidth;
+            const canvasHeight = parseInt(previewScreen.style.height) || previewScreen.clientHeight;
             
-            widget.x = Math.max(0, newX);
-            widget.y = Math.max(0, newY);
+            // Calculate scale from transform
+            const transform = previewScreen.style.transform;
+            const scaleMatch = transform.match(/scale\(([0-9.]+)\)/);
+            const scale = scaleMatch ? parseFloat(scaleMatch[1]) : 1;
+            
+            // Calculate position relative to scaled canvas
+            const newX = (e.clientX - screenRect.left) / scale - dragOffset.x;
+            const newY = (e.clientY - screenRect.top) / scale - dragOffset.y;
+            
+            widget.x = Math.max(0, Math.min(newX, canvasWidth - widget.width));
+            widget.y = Math.max(0, Math.min(newY, canvasHeight - widget.height));
             
             const el = document.getElementById(`preview-widget-${selectedWidget}`);
             el.style.left = `${widget.x}px`;

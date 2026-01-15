@@ -123,6 +123,23 @@ def update_screen(screen_id):
     return jsonify({'success': True})
 
 
+@app.route('/api/screens/<screen_id>', methods=['DELETE'])
+def delete_screen(screen_id):
+    """Delete a screen and its layout."""
+    if screen_id not in screens:
+        return jsonify({'error': 'Screen not found'}), 404
+    
+    # Remove screen and its layout
+    del screens[screen_id]
+    if screen_id in content_layouts:
+        del content_layouts[screen_id]
+    
+    # Notify dashboard
+    socketio.emit('screen_deleted', {'id': screen_id}, namespace='/')
+    
+    return jsonify({'success': True})
+
+
 @app.route('/api/screens/<screen_id>/layout', methods=['GET'])
 def get_layout(screen_id):
     """Get layout for a screen."""
